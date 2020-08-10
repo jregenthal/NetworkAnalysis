@@ -57,6 +57,7 @@ def create_networkcopy_with_missing_nodes(graph, list_missing_percentages):
 def sim_infection(graph, immune_nodes, unimmune_nodes, numOfSimulations, beta, gamma, seed):
     """ 
     Function to simulate an several outbreaks based on the SIR model.
+    Returns a tuple with (mean, std) of outbreak size
         graph = graph in which the outbreak is simulated
         immune_nodes = list of nodes that are immune
         unimmune_nodes = list of nodes that are unimmune
@@ -87,10 +88,10 @@ def sim_infection(graph, immune_nodes, unimmune_nodes, numOfSimulations, beta, g
         sp.reset()
     
     # Outbreak size = % of nodes that are recovered/immune and were infected
-    pctTotalPopInf_mean = np.mean(final_size_list) / 1000 #graph.number_of_nodes() # outbreak size in % 
-    pctTotalPopInf_std = np.std(final_size_list) / 1000 #graph.number_of_nodes() # std of outbreak size
+    pctTotalPopInf_mean = np.mean(final_size_list) / graph.number_of_nodes() # outbreak size in % 
+    pctTotalPopInf_std = np.std(final_size_list) / graph.number_of_nodes() # std of outbreak size
     
-    return [pctTotalPopInf_mean, pctTotalPopInf_std]
+    return (pctTotalPopInf_mean, pctTotalPopInf_std)
 
 
 # Define parameters ##########################################################
@@ -109,6 +110,10 @@ num_SIR = 2000 #Number of simulations per network
 beta = 0.95
 gamma = 1
 
+centralities = [('degree', nx.degree_centrality), 
+                ('between', nx.betweenness_centrality), 
+                ('eigen', nx.eigenvector_centrality_numpy), 
+                ('page', nx.pagerank)]
 
 
 # Creating random networks ###################################################
@@ -131,9 +136,9 @@ del data, nodes, edges, G
 
 
 # Simulations ################################################################
-listing = []
+data_degree, data_between, data_eigen, data_page = [], [], [], []
 # For each true network
-for i, G_true in enumerate(graphs):
+for i, G_true in enumerate(graphs[:5]):
     # For each observed network with p% missing nodes
     for G_observed, p in create_networkcopy_with_missing_nodes(G_true, P):
         seed = np.random.randint(MAX_CPLUSPLUS_INT+1)
@@ -146,47 +151,38 @@ for i, G_true in enumerate(graphs):
         #Random immunization
         immune_nodes = random.sample(list(G_observed.nodes), num_immune_nodes) # Select q% of nodes for immunization
         unimmune_nodes = list(set(G_observed.nodes) - set(immune_nodes))
-        mean_ran, std = sim_infection(G_observed, immune_nodes, unimmune_nodes, num_SIR, beta, gamma, seed)
+        mean_ran, std_ran = sim_infection(G_observed, immune_nodes, unimmune_nodes, num_SIR, beta, gamma, seed)
         
-        #Degree immunization
-        dic_degree = nx.degree_centrality(G_observed) 
-        immune_nodes = sorted(dic_degree, key=dic_degree.get, reverse=True)[:num_immune_nodes]
-        unimmune_nodes = list(set(G_observed.nodes) - set(immune_nodes))
-        mean_deg, std = sim_infection(G_observed, immune_nodes, unimmune_nodes, num_SIR, beta, gamma, seed)
-        
-        #Betweenness immunization
-        dic_betweeness = nx.betweenness_centrality(G_observed) 
-        immune_nodes = sorted(dic_betweeness, key=dic_degree.get, reverse=True)[:num_immune_nodes]
-        unimmune_nodes = list(set(G_observed.nodes) - set(immune_nodes))
-        mean_bet, std = sim_infection(G_observed, immune_nodes, unimmune_nodes, num_SIR, beta, gamma, seed)
-        
-        #Eigenvector immunization
-        #dic_eigen = nx.eigenvector_centrality(G_observed) 
-        dic_eigen = nx.eigenvector_centrality_numpy(G_observed) 
-        immune_nodes = sorted(dic_eigen, key=dic_degree.get, reverse=True)[:num_immune_nodes]
-        unimmune_nodes = list(set(G_observed.nodes) - set(immune_nodes))
-        mean_eig, std = sim_infection(G_observed, immune_nodes, unimmune_nodes, num_SIR, beta, gamma, seed)
-        
-        #Pagerank immunization
-        dic_pagerank = nx.pagerank(G_observed) 
-        immune_nodes = sorted(dic_pagerank, key=dic_degree.get, reverse=True)[:num_immune_nodes]
-        unimmune_nodes = list(set(G_observed.nodes) - set(immune_nodes))
-        mean_page, std = sim_infection(G_observed, immune_nodes, unimmune_nodes, num_SIR, beta, gamma, seed)
-     
-        listing.append([i, G_observed.number_of_nodes(), p, mean_noImm, mean_ran, mean_deg, mean_bet, mean_eig, mean_page])
+        # For each centrality
+        for name, c in centralities:
+            dic = c(G_observed)
+            immune_nodes = sorted(dic, key=dic.get, reverse=True)[:num_immune_nodes]
+            unimmune_nodes = list(set(G_observed.nodes) - set(immune_nodes))
+            mean, std = sim_infection(G_observed, immune_nodes, unimmune_nodes, num_SIR, beta, gamma, seed)
+            exec(f'data_{name}.append([i, p, mean_ran, std_ran, mean, std])')
+            
 
-# Dataframe with means of each immunization strategy (no std included yet)
-df = pd.DataFrame(listing, 
-                  columns=['index', 'graphsize', 'p', 'mean_noImm', 'mean_ran', 'mean_deg', 'mean_bet', 'mean_eig', 'mean_page'])
-
-# Get mean for each error level
-df.groupby('p')[['mean_ran', 'mean_deg', 'mean_bet', 'mean_eig', 'mean_page']].mean()
+# Create dataframe for results of each centrality
+for name, c in centralities:
+    exec(f"data_{name} = pd.DataFrame(data_{name}, columns = ['graph_ID', 'p', ''mean_ran', 'std_ran', 'mean_strat', 'std_strat'])")
+    exec(f"data_{name}.name = name")
+    
+del i, G_true, p, num_immune_nodes, mean_noImm, std_noImm, immune_nodes, unimmune_nodes, mean_ran, std_ran, dic, mean, std, name, c
 
 
-#To Do: 
-    #Defining function for immunization strategy?
+# Analysis ###################################################################
+
+# Pring mean for each error level for each centrality
+for df in [data_degree, data_between, data_eigen, data_page]:
+    df['robustness_Ros'] = df['mean_ran'] - df['mean_strat']
+    print('\n', df.name)
+    print(df.groupby('p')[['mean_ran', 'mean_strat', 'robustness_Ros']].mean())
+    
+
+
+#To Do for each centrality df: 
     #Calculate Rosenblatt-Robustness (difference to ran-immunization)
-    #Include Niemeyer-Robustness for each centrality/strategy
+    #Include Niemeyer-Robustness
 
 
 

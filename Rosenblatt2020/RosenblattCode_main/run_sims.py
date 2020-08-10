@@ -156,7 +156,7 @@ def run_sims(networkVersions, netType, beta, gamma, fracsMissing, fracsImmunized
         for fracImmunized in fracsImmunized:
             print(fracImmunized)
 
-            numNodesRemovedByIntrv = np.round(sizeOfG * fracImmunized).astype(int)
+            numNodesRemovedByIntrv = np.round(sizeOfG * fracImmunized).astype(int) #immunized nodes
             
             print("numNodesRemovedByIntrv: ", numNodesRemovedByIntrv)
 
