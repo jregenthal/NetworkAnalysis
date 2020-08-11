@@ -8,13 +8,14 @@ Date: August 2020
 
 # Presettings ################################################################
 # Import packages
+import os
 import pandas as pd
 import numpy as np
 import random
 import networkx as nx
-from collections import Counter
-import os
 from spreading_CR import SpreadingProcess #https://github.com/gstonge/spreading_CR/blob/master/README.md
+from EstimatingCentralityRobustness import robustness_calculator_builder #https://github.com/crsqq/EstimatingCentralityRobustness
+
 
 # User-defined functions
 def create_random_networks(original_graph, number_of_random_graphs, networksize):
@@ -138,7 +139,7 @@ del data, nodes, edges, G
 # Simulations ################################################################
 data_degree, data_between, data_eigen, data_page = [], [], [], []
 # For each true network
-for i, G_true in enumerate(graphs[:5]):
+for i, G_true in enumerate(graphs[:3]):
     # For each observed network with p% missing nodes
     for G_observed, p in create_networkcopy_with_missing_nodes(G_true, P):
         seed = np.random.randint(MAX_CPLUSPLUS_INT+1)
@@ -154,20 +155,28 @@ for i, G_true in enumerate(graphs[:5]):
         mean_ran, std_ran = sim_infection(G_observed, immune_nodes, unimmune_nodes, num_SIR, beta, gamma, seed)
         
         # For each centrality
-        for name, c in centralities:
-            dic = c(G_observed)
+        for name, centrality in centralities:
+            # Immunization
+            dic = centrality(G_observed)
             immune_nodes = sorted(dic, key=dic.get, reverse=True)[:num_immune_nodes]
             unimmune_nodes = list(set(G_observed.nodes) - set(immune_nodes))
+            # Simulation
             mean, std = sim_infection(G_observed, immune_nodes, unimmune_nodes, num_SIR, beta, gamma, seed)
-            exec(f'data_{name}.append([i, p, mean_ran, std_ran, mean, std])')
+            # Calculate Robustness
+            robustness_calculator = robustness_calculator_builder(centrality)
+            robustness_Nie = robustness_calculator(G_true, G_observed)
+            #estimate_robustness(G_observed, partial(remove_nodes_uniform, alpha=0.1), robustness_calculator)
+            
+            # Save in list
+            exec(f'data_{name}.append([i, p, mean_ran, std_ran, mean, std, robustness_Nie])')
             
 
 # Create dataframe for results of each centrality
 for name, c in centralities:
-    exec(f"data_{name} = pd.DataFrame(data_{name}, columns = ['graph_ID', 'p', ''mean_ran', 'std_ran', 'mean_strat', 'std_strat'])")
+    exec(f"data_{name} = pd.DataFrame(data_{name}, columns = ['graph_ID', 'p', 'mean_ran', 'std_ran', 'mean_strat', 'std_strat', 'robustness_Nie'])")
     exec(f"data_{name}.name = name")
     
-del i, G_true, p, num_immune_nodes, mean_noImm, std_noImm, immune_nodes, unimmune_nodes, mean_ran, std_ran, dic, mean, std, name, c
+del i, G_true, p, num_immune_nodes, mean_noImm, std_noImm, immune_nodes, unimmune_nodes, mean_ran, std_ran, dic, mean, std, name, centrality
 
 
 # Analysis ###################################################################
@@ -176,24 +185,10 @@ del i, G_true, p, num_immune_nodes, mean_noImm, std_noImm, immune_nodes, unimmun
 for df in [data_degree, data_between, data_eigen, data_page]:
     df['robustness_Ros'] = df['mean_ran'] - df['mean_strat']
     print('\n', df.name)
-    print(df.groupby('p')[['mean_ran', 'mean_strat', 'robustness_Ros']].mean())
+    print(df.groupby('p')[['mean_ran', 'mean_strat', 'robustness_Ros', 'robustness_Nie']].mean())
+    print(df.groupby('p')[['robustness_Ros', 'robustness_Nie']].std())
     
 
+# Plotting ###################################################################
 
-#To Do for each centrality df: 
-    #Calculate Rosenblatt-Robustness (difference to ran-immunization)
-    #Include Niemeyer-Robustness
-
-
-
-
-
-#Trying around
-
-#mean_noImm, std_noImm = sim_infection(G_observed, [], list(G_observed.nodes), num_SIR, beta, gamma, seed)
-graph = G_observed.copy()
-
-immune_nodes = []
-unimmune_nodes = list(G_observed.nodes)
-numOfSimulations = num_SIR
 
