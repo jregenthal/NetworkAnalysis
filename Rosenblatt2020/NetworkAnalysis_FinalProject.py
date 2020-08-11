@@ -7,8 +7,11 @@ Date: August 2020
 """
 
 # Presettings ################################################################
-# Import packages
 import os
+# Set working directory to path where script is
+os.chdir('/Users/johannaregenthal/Documents/GitHub/NetworkAnalysis/Rosenblatt2020')
+
+# Import packages
 import pandas as pd
 import numpy as np
 import random
@@ -97,8 +100,6 @@ def sim_infection(graph, immune_nodes, unimmune_nodes, numOfSimulations, beta, g
 
 # Define parameters ##########################################################
 
-# Set working directory
-os.chdir('/Users/johannaregenthal/Documents/GitHub/NetworkAnalysis/Rosenblatt2020')
 MAX_CPLUSPLUS_INT = 4294967295
 
 P = np.arange(0, 0.9, 0.1) #Part of missing nodes (error level 0 - 80%)
