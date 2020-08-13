@@ -33,7 +33,7 @@ def create_random_networks(original_graph, number_of_random_graphs, networksize)
     N = 0
     graphs = []
     while N < number_of_random_graphs:
-        #Sample from original degree_sequence
+        #Sample n nodes from original degree_sequence randomly
         deg_sequence_sample = random.sample(degree_sequence, networksize)
         #Check for valid degree sequence
         if nx.is_graphical(deg_sequence_sample):
@@ -58,7 +58,7 @@ def create_networkcopy_with_missing_nodes(graph, list_missing_percentages):
 
 
 
-def sim_infection(graph, immune_nodes, unimmune_nodes, numOfSimulations, beta, gamma, seed):
+def sim_infection(graph, immune_nodes, numOfSimulations, beta, gamma):
     """ 
     Function to simulate an several outbreaks based on the SIR model.
     Returns a tuple with (mean, std) of outbreak size
@@ -67,51 +67,67 @@ def sim_infection(graph, immune_nodes, unimmune_nodes, numOfSimulations, beta, g
         unimmune_nodes = list of nodes that are unimmune
         numOfSimulations = number of simulations
         beta, gamma = parameters for the SIR model outbreak
-        seed = similar seed for each simulation
     """
-    final_size_list = []
+    final_size_list = [] # List for final size of infected nodes per simulation
     
-    # patient0s should be nodes which have at least one neighbor, otherwise sp.initialize will throw an error, so we first check can be used
+    # Create list of unimmune nodes
+    unimmune_nodes = list(set(graph.nodes) - set(immune_nodes))
+    
+    # patient0s should be nodes which have at least one neighbor
+        # otherwise sp.initialize will throw an error, 
+        # so we first check fornodes can be used
     nodes_with_neighbors = [n for n in unimmune_nodes if len(list(graph.neighbors(n))) > 0]
+    
+    # Draw random patient0s for numOfSimulations times
     array_patient0s = np.random.choice(nodes_with_neighbors, size=numOfSimulations)
     
+    # Each element has to be list itself (because of sp.initialize function)
     list_patient0s = [[patient0] for patient0 in array_patient0s] 
-    del nodes_with_neighbors, array_patient0s
     
+    # Create simulation object
     sp = SpreadingProcess(list(graph.edges()), beta, gamma, 0)
-    # Start simulations
+    
+    # Start simulations for numOfSimulations runs
     for i in range(numOfSimulations): 
+        seed = np.random.randint(MAX_CPLUSPLUS_INT+1)
+        
+        # Initialize simulation with infected patient0 and immune_nodes
         sp.initialize(list_patient0s[i], immune_nodes, seed)
+        
+        # Run outbreak infinitly (no time constraint)
         sp.evolve(np.inf)
         
-        # Check how many nodes are infected and append to final_size_list
+        # Check how many nodes are infected and store in finalSizeInclTargets
         finalSizeInclTargets = sp.get_Rnode_number_vector()[-1]
-        adjustedFinalSize = finalSizeInclTargets -  len(immune_nodes)
-        final_size_list.append(adjustedFinalSize) # final_size_list = Number of infected nodes per simulation
         
+        # finalSizeInclTargets includes recovered/immune nodes, so we need to substract the number of immune_nodes
+        adjustedFinalSize = finalSizeInclTargets -  len(immune_nodes)
+        
+        # Append everything to final_size_list = Number of infected nodes per simulation
+        final_size_list.append(adjustedFinalSize) 
+        
+        # Reset spreading process
         sp.reset()
     
-    # Outbreak size = % of nodes that are recovered/immune and were infected
-    pctTotalPopInf_mean = np.mean(final_size_list) / graph.number_of_nodes() # outbreak size in % 
-    pctTotalPopInf_std = np.std(final_size_list) / graph.number_of_nodes() # std of outbreak size
+    # Calculate mean and std of outbreak size by using final_size_list
+    pctTotalPopInf_mean = np.mean(final_size_list) / graph.number_of_nodes() # mean of outbreak size in % 
+    pctTotalPopInf_std = np.std(final_size_list) / graph.number_of_nodes()   # std of outbreak size
     
     return (pctTotalPopInf_mean, pctTotalPopInf_std)
 
 
 # Define parameters ##########################################################
 
-MAX_CPLUSPLUS_INT = 4294967295
+MAX_CPLUSPLUS_INT = 4294967295 #seed similar to original
 
 P = np.arange(0, 0.9, 0.1) #Part of missing nodes (error level 0 - 80%)
-q = 0.1 #Fraction of immunized nodes = 10%
-n = 1000 #Number of nodes = 1000
-N = 50 #5000 # Number of random networks
-num_SIR = 2000 #Number of simulations per network
+q = 0.1                    #Fraction of immunized nodes = 10%
+n = 1000                   #Number of nodes = 1000
+N = 50                     #Number of random networks
+numOfSimulations = 2000    #Number of simulations per network
+beta = 0.95; gamma = 1     #Outbreak parameters
 
-# Outbreak parameters
-beta = 0.95
-gamma = 1
-
+# List of examined centralities to loop over
 centralities = [('degree', nx.degree_centrality), 
                 ('between', nx.betweenness_centrality), 
                 ('eigen', nx.eigenvector_centrality_numpy), 
@@ -129,8 +145,8 @@ edges = list(zip(data.V1, data.V2))
 G = nx.Graph()
 G.add_nodes_from(nodes)
 G.add_edges_from(edges)
-#print(nx.info(G))
 
+# Create N random graphs of size n from the Colorado Springs network G
 graphs = create_random_networks(G, N, n)
 
 # delete unnecessary variables
@@ -138,35 +154,41 @@ del data, nodes, edges, G
 
 
 # Simulations ################################################################
+
+# Initialize list to store data for each centrality
 data_degree, data_between, data_eigen, data_page = [], [], [], []
+
+# Number of nodes to be immunized (q% of G_observed nodes)
+num_immune_nodes = int(n * q)
+
 # For each true network
-for i, G_true in enumerate(graphs[:3]):
+for i, G_true in enumerate(graphs[:5]):
+    
     # For each observed network with p% missing nodes
     for G_observed, p in create_networkcopy_with_missing_nodes(G_true, P):
-        seed = np.random.randint(MAX_CPLUSPLUS_INT+1)
-        num_immune_nodes = int(len(G_observed.nodes) * q)
-        print('Graph: ', i, G_observed.number_of_nodes(), p)
+
+        # Print Network ID, and error-level
+        print('G_true: ', i, 'p: ', p)
         
-        #Simulation with no immunization
-        mean_noImm, std_noImm = sim_infection(G_observed, [], list(G_observed.nodes), num_SIR, beta, gamma, seed)
+        # Simulation with no immunization in G_true
+        mean_noImm, std_noImm = sim_infection(G_true, [], numOfSimulations, beta, gamma)
         
-        #Random immunization
-        immune_nodes = random.sample(list(G_observed.nodes), num_immune_nodes) # Select q% of nodes for immunization
-        unimmune_nodes = list(set(G_observed.nodes) - set(immune_nodes))
-        mean_ran, std_ran = sim_infection(G_observed, immune_nodes, unimmune_nodes, num_SIR, beta, gamma, seed)
+        # Random immunization of G_observed nodes and Simulation in G_true with random immunized nodes of G_observed
+        immune_nodes = random.sample(list(G_observed.nodes), num_immune_nodes)
+        mean_ran, std_ran = sim_infection(G_true, immune_nodes, numOfSimulations, beta, gamma)
         
         # For each centrality
         for name, centrality in centralities:
-            # Immunization
+            # Immunization in G_observed
             dic = centrality(G_observed)
             immune_nodes = sorted(dic, key=dic.get, reverse=True)[:num_immune_nodes]
-            unimmune_nodes = list(set(G_observed.nodes) - set(immune_nodes))
-            # Simulation
-            mean, std = sim_infection(G_observed, immune_nodes, unimmune_nodes, num_SIR, beta, gamma, seed)
-            # Calculate Robustness
+            
+            # Simulation of infection in G_true with strategic immunized nodes
+            mean, std = sim_infection(G_true, immune_nodes, numOfSimulations, beta, gamma)
+            
+            # Calculate Robustness with Niemeyer function
             robustness_calculator = robustness_calculator_builder(centrality)
-            robustness_Nie = robustness_calculator(G_true, G_observed)
-            #estimate_robustness(G_observed, partial(remove_nodes_uniform, alpha=0.1), robustness_calculator)
+            robustness_Nie = robustness_calculator(G_true, G_observed)            
             
             # Save in list
             exec(f'data_{name}.append([i, p, mean_ran, std_ran, mean, std, robustness_Nie])')
@@ -176,8 +198,6 @@ for i, G_true in enumerate(graphs[:3]):
 for name, c in centralities:
     exec(f"data_{name} = pd.DataFrame(data_{name}, columns = ['graph_ID', 'p', 'mean_ran', 'std_ran', 'mean_strat', 'std_strat', 'robustness_Nie'])")
     exec(f"data_{name}.name = name")
-    
-del i, G_true, p, num_immune_nodes, mean_noImm, std_noImm, immune_nodes, unimmune_nodes, mean_ran, std_ran, dic, mean, std, name, centrality
 
 
 # Analysis ###################################################################
@@ -188,8 +208,7 @@ for df in [data_degree, data_between, data_eigen, data_page]:
     print('\n', df.name)
     print(df.groupby('p')[['mean_ran', 'mean_strat', 'robustness_Ros', 'robustness_Nie']].mean())
     print(df.groupby('p')[['robustness_Ros', 'robustness_Nie']].std())
-    
+
+
 
 # Plotting ###################################################################
-
-
