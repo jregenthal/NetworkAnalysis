@@ -65,8 +65,10 @@ plot <- function(data_trans, title) {
     scale_color_manual(values = c("red", "blue")) +
     labs(title = title) +
     theme_bw() +
-    theme(axis.title.y.left = element_text(colour = "blue"),
-          axis.title.y.right = element_text(colour = "red"),
+    theme(axis.title.y.left = element_text(colour = "blue", size = 16),
+          axis.title.y.right = element_text(colour = "red", size = 16),
+          axis.title.x = element_text(size = 16),
+          axis.text = element_text(size = 12),
           plot.title = element_text(hjust = 0.5),
           legend.position = "none")
 }
@@ -102,10 +104,14 @@ ggplot(data_Nie, aes(x = p, y = mean, color = Centrality)) +
   geom_point() + geom_line() +
   scale_y_continuous("Robustness of Centrality Measure") +
   scale_x_continuous("Proportion of missing nodes p") +
-  scale_color_manual(values = c("red", "blue", "green", "yellow")) +
-  labs(title = "Traditional Robustness") +
+  scale_color_manual(values = c("red", "blue", "green", "yellow3")) +
+  labs(title = "Traditional robustness") +
   theme_bw() +
-  theme(plot.title = element_text(hjust = 0.5))
+  theme(axis.title = element_text(size = 14),
+        plot.title = element_text(hjust = 0.5),
+        axis.text = element_text(size = 10),
+        legend.title = element_text(size = rel(0)),
+        legend.text = element_text(size = 14))
 
 
 #### Immunization Effectiveness & Immunization Robustness ####
@@ -113,9 +119,11 @@ ggplot(data_Nie, aes(x = p, y = mean, color = Centrality)) +
 # Define function to transform data 
 
 transform_Ros <- function(data_trans, centrality) {
+  init <- data_trans$mean_Ros[1]
   data_trans <- data_trans %>%
-    mutate(Centrality = centrality) %>%
-    select(p, mean = mean_Ros, std = std_Ros, Centrality)
+    mutate(Centrality = centrality,
+           diff_abs = mean_Ros - init) %>%
+    select(p, mean = mean_Ros, std = std_Ros, Centrality, diff_abs)
 }
 
 # Generate transformed dataframe using function transform_Ros
@@ -131,16 +139,26 @@ ggplot(data_Ros, aes(x = p, y = mean, color = Centrality)) +
   geom_point() + geom_line() +
   scale_y_continuous("Difference in Outbreak Size vs. Random Immunization") +
   scale_x_continuous("Proportion of missing nodes p") +
-  scale_color_manual(values = c("red", "blue", "green", "yellow")) +
+  scale_color_manual(values = c("red", "blue", "green", "yellow3")) +
   labs(title = "Immunization Effectiveness") +
   theme_bw() +
-  theme(plot.title = element_text(hjust = 0.5))
+  theme(axis.title = element_text(size = 14),
+        plot.title = element_text(hjust = 0.5),
+        axis.text = element_text(size = 10),
+        legend.title = element_text(size = rel(0)),
+        legend.text = element_text(size = 14))
 
 # Generate plot with immunization robustness for all centrality measures
 
-
-
-
-
-
-
+ggplot(data_Ros, aes(x = p, y = diff_abs, color = Centrality)) + 
+  geom_point() + geom_line() +
+  scale_y_continuous("Difference in Effectiveness to error-free network") +
+  scale_x_continuous("Proportion of missing nodes p") +
+  scale_color_manual(values = c("red", "blue", "green", "yellow3")) +
+  labs(title = "Immunization Robustness") +
+  theme_bw() +
+  theme(axis.title = element_text(size = 14),
+        plot.title = element_text(hjust = 0.5),
+        axis.text = element_text(size = 10),
+        legend.title = element_text(size = rel(0)),
+        legend.text = element_text(size = 14))
