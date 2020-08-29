@@ -10,7 +10,7 @@ Date: August 2020
 
 import os
 # Set working directory to path where the script is
-os.chdir('/Users/johannaregenthal/Documents/GitHub/NetworkAnalysis/Rosenblatt2020')
+os.chdir('/Users/johannaregenthal/Documents/GitHub/NetworkAnalysis')
 
 # Import required packages 
 import pandas as pd
