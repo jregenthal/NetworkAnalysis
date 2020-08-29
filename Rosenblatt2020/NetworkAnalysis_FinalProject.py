@@ -6,12 +6,13 @@
 Date: August 2020
 """
 
-# Presettings ################################################################
+# 1. Presettings ################################################################
+
 import os
-# Set working directory to path where script is
+# Set working directory to path where the script is
 os.chdir('/Users/johannaregenthal/Documents/GitHub/NetworkAnalysis/Rosenblatt2020')
 
-# Import packages
+# Import required packages 
 import pandas as pd
 import numpy as np
 import random
@@ -20,23 +21,25 @@ from spreading_CR import SpreadingProcess #https://github.com/gstonge/spreading_
 from EstimatingCentralityRobustness import robustness_calculator_builder #https://github.com/crsqq/EstimatingCentralityRobustness
 
 
-# User-defined functions
+# Define user-specific functions
 def create_random_networks(original_graph, number_of_random_graphs, networksize):
     """
-    Function to create several random graphs based on one original graph.
-    Returns list of random graphs
+    Function to generate a defined number of random graphs with a specified networksize n based on one original graph. 
+    More precisely, the function performs a configuration model which creates random graphs from a given degree sequence.
+    The function returns a list of random graphs.
     """
     # Get degree sequence from original graph
     degree_sequence = [d for n, d in original_graph.degree()]
 
-    # Create true configuration networks without self-loops and parallel edges
+    # Create true configuration networks with the same degree sequence without self-loops and parallel edges
     N = 0
     graphs = []
     while N < number_of_random_graphs:
-        #Sample n nodes from original degree_sequence randomly
+        # Sample n nodes from original degree sequence at random
         deg_sequence_sample = random.sample(degree_sequence, networksize)
-        #Check for valid degree sequence
+        # Check for valid degree sequence 
         if nx.is_graphical(deg_sequence_sample):
+            # Generate random graph based on the sampled nodes and append to list
             G_random = nx.configuration_model(deg_sequence_sample, create_using = nx.Graph())
             graphs.append(G_random)
             N += 1
@@ -45,43 +48,44 @@ def create_random_networks(original_graph, number_of_random_graphs, networksize)
 
 def create_networkcopy_with_missing_nodes(graph, list_missing_percentages):
     """
-    Function to return a list of graphs which have p% missing nodes based on a given list P.
+    Function to generate copies of a graph with varying proportion p of missing nodes given by a list P.
+    The function returns a list of graphs, where each graph is a network copy with p% of the nodes missing.
         graph = true network
-        list_missing_percentages = list that contains the percentages of which the observed networks should be created
+        list_missing_percentages = list that contains different values for p
     """
     lst = []
     for p in list_missing_percentages:
+        # Generate copy of the graph, randomly remove p% of the nodes from the set and append to list
         G = graph.copy()
         G.remove_nodes_from(random.sample(list(G.nodes()), int(len(graph.nodes()) * p)))
         lst.append((G, p))
     return lst
 
 
-
 def sim_infection(graph, immune_nodes, numOfSimulations, beta, gamma):
     """ 
-    Function to simulate an several outbreaks based on the SIR model.
-    Returns a tuple with (mean, std) of outbreak size
+    Function to perform a defined number of outbreak simulations based on the SIR model in a given graph under 
+    consideration of a defined set of immunized nodes.
+    The function returns a tuple with mean and standard deviation (std) of the outbreak size over all simulations, 
+    where the outbreak size is given by the proportion of infected nodes in the graph. 
         graph = graph in which the outbreak is simulated
         immune_nodes = list of nodes that are immune
-        unimmune_nodes = list of nodes that are unimmune
         numOfSimulations = number of simulations
-        beta, gamma = parameters for the SIR model outbreak
+        beta, gamma = outbreak parameters for the SIR model
     """
-    final_size_list = [] # List for final size of infected nodes per simulation
+    final_size_list = [] # List containing final size of infected nodes per simulation
     
     # Create list of unimmune nodes
     unimmune_nodes = list(set(graph.nodes) - set(immune_nodes))
     
-    # patient0s should be nodes which have at least one neighbor
-        # otherwise sp.initialize will throw an error, 
-        # so we first check fornodes can be used
+    # Identify potential starting nodes of the outbreak simulation (= patient0s) by checking for nodes with at least
+    # one neighbor. Otherwise, the function sp-initialize throws an error
     nodes_with_neighbors = [n for n in unimmune_nodes if len(list(graph.neighbors(n))) > 0]
     
-    # Draw random patient0s for numOfSimulations times
+    # Draw patient0s from the nodes_with_neighbors for each simulation at random
     array_patient0s = np.random.choice(nodes_with_neighbors, size=numOfSimulations)
     
-    # Each element has to be list itself (because of sp.initialize function)
+    # Convert each element to an own list due to the form of the sp.initialize function
     list_patient0s = [[patient0] for patient0 in array_patient0s] 
     
     # Create simulation object
@@ -94,38 +98,39 @@ def sim_infection(graph, immune_nodes, numOfSimulations, beta, gamma):
         # Initialize simulation with infected patient0 and immune_nodes
         sp.initialize(list_patient0s[i], immune_nodes, seed)
         
-        # Run outbreak infinitly (no time constraint)
+        # Run outbreak simulation infinitly (without time constraint)
         sp.evolve(np.inf)
         
-        # Check how many nodes are infected and store in finalSizeInclTargets
+        # Check the number of recovered nodes (including recovered and immune nodes in terms of the report) and 
+        # store in finalSizeInclTargets
         finalSizeInclTargets = sp.get_Rnode_number_vector()[-1]
         
-        # finalSizeInclTargets includes recovered/immune nodes, so we need to substract the number of immune_nodes
+        # Subtract the number of immune nodes from finalSizeInclTargets to obtain the number of infected nodes
         adjustedFinalSize = finalSizeInclTargets -  len(immune_nodes)
         
-        # Append everything to final_size_list = Number of infected nodes per simulation
+        # Append everything to final_size_list containing the number of infected nodes per simulation
         final_size_list.append(adjustedFinalSize) 
         
         # Reset spreading process
         sp.reset()
     
-    # Calculate mean and std of outbreak size by using final_size_list
+    # Calculate mean and standard deviation of outbreak size over all simulations by using final_size_list
     pctTotalPopInf_mean = np.mean(final_size_list) / graph.number_of_nodes() # mean of outbreak size in % 
     pctTotalPopInf_std = np.std(final_size_list) / graph.number_of_nodes()   # std of outbreak size
     
     return (pctTotalPopInf_mean, pctTotalPopInf_std)
 
 
-# Define parameters ##########################################################
+# 2. Definition of parameters ###################################################
 
-MAX_CPLUSPLUS_INT = 4294967295 #seed similar to original
+MAX_CPLUSPLUS_INT = 4294967295 # Seed similar to original 
 
-P = np.arange(0, 0.9, 0.1) #Part of missing nodes (error level 0 - 80%)
-q = 0.1                    #Fraction of immunized nodes = 10%
-n = 1000                   #Number of nodes = 1000
-N = 50                     #Number of random networks
-numOfSimulations = 2000    #Number of simulations per network
-beta = 0.95; gamma = 1     #Outbreak parameters
+P = np.arange(0, 0.9, 0.1) # Part of missing nodes (nine different error levels between 0 and 80%)
+q = 0.1                    # Fraction of immunized nodes = 10%
+n = 1000                   # Number of nodes = 1000
+N = 5000                   # Number of random networks = 5000
+numOfSimulations = 2000    # Number of simulations per random network = 2000
+beta = 0.95; gamma = 1     # Outbreak parameters of the SIR model
 
 # List of examined centralities to loop over
 centralities = [('degree', nx.degree_centrality), 
@@ -134,81 +139,80 @@ centralities = [('degree', nx.degree_centrality),
                 ('page', nx.pagerank)]
 
 
-# Creating random networks ###################################################
+# 3. Creation of random networks ################################################
 
 # Import network data
 data = pd.read_csv('edgelist.truecolsprings.csv', usecols = ['V1', 'V2'])
 nodes = list(set(data.V1).union(set(data.V2)))
 edges = list(zip(data.V1, data.V2))
 
-# Create Colorado Springs network
+# Create Colorado Springs network (= Original network) 
 G = nx.Graph()
 G.add_nodes_from(nodes)
 G.add_edges_from(edges)
 
-# Create N random graphs of size n from the Colorado Springs network G
+# Create N random graphs of size n from the Colorado Springs network G (= True networks) 
 graphs = create_random_networks(G, N, n)
 
-# delete unnecessary variables
+# Delete unnecessary variables from network data
 del data, nodes, edges, G
 
 
-# Simulations ################################################################
+# 4. Simulations ################################################################
 
-# Initialize list to store data for each centrality
+# Initialize list to store data for each centrality measure
 data_degree, data_between, data_eigen, data_page = [], [], [], []
 
-# Number of nodes to be immunized (q% of G_observed nodes)
+# Define number of nodes to be immunized (q% of the n nodes in the true network)
 num_immune_nodes = int(n * q)
 
-# For each true network
+# For each true network G_true 
 for i, G_true in enumerate(graphs[:5]):
     
-    # For each observed network with p% missing nodes
+    # For each observed network G_observed with error level p (p% of nodes missing)
     for G_observed, p in create_networkcopy_with_missing_nodes(G_true, P):
 
-        # Print Network ID, and error-level
+        # Print network ID and error level p
         print('G_true: ', i, 'p: ', p)
         
-        # Simulation with no immunization in G_true
-        mean_noImm, std_noImm = sim_infection(G_true, [], numOfSimulations, beta, gamma)
-        
-        # Random immunization of G_observed nodes and Simulation in G_true with random immunized nodes of G_observed
+        # Random immunization: Perform outbreak simulation in G_true with randomly immunized nodes sampled from G_observed
+        # and obtain mean and std of the outbreak size
         immune_nodes = random.sample(list(G_observed.nodes), num_immune_nodes)
         mean_ran, std_ran = sim_infection(G_true, immune_nodes, numOfSimulations, beta, gamma)
         
-        # For each centrality
+        # For each centrality measure 
         for name, centrality in centralities:
-            # Immunization in G_observed
+            
+            # Strategic immunization: Perform outbreak simulation in G_true with strategically immunized nodes from 
+            # G_observed determined by the respective centrality measure and obtain mean and std of the outbreak size
             dic = centrality(G_observed)
             immune_nodes = sorted(dic, key=dic.get, reverse=True)[:num_immune_nodes]
+            mean_strat, std_strat = sim_infection(G_true, immune_nodes, numOfSimulations, beta, gamma)
             
-            # Simulation of infection in G_true with strategic immunized nodes
-            mean, std = sim_infection(G_true, immune_nodes, numOfSimulations, beta, gamma)
+            # Robustness by Rosenblatt et al. (2020): Use the concept proposed by Rosenblatt et al. (2020) to compute 
+            # robustness of the centrality measure with respect to the corresponding immunization strategy 
             
-            # Calculate Robustness with Niemeyer function
+            robustness_Ros = mean_ran - mean_strat
+            
+            # Robustness by Martin et al. (2019): Use the function proposed by Martin et al. (2019) to compute 
+            # robustness of the centrality measure
             robustness_calculator = robustness_calculator_builder(centrality)
             robustness_Nie = robustness_calculator(G_true, G_observed)            
             
-            # Save in list
-            exec(f'data_{name}.append([i, p, mean_ran, std_ran, mean, std, robustness_Nie])')
+            # Save relevant values in list 
+            exec(f'data_{name}.append([i, p, mean_ran, std_ran, mean_strat, std_strat, robustness_Nie, robustness_Ros])')
             
 
-# Create dataframe for results of each centrality
+# Create dataframe for the simulation results of each centrality measure
 for name, c in centralities:
-    exec(f"data_{name} = pd.DataFrame(data_{name}, columns = ['graph_ID', 'p', 'mean_ran', 'std_ran', 'mean_strat', 'std_strat', 'robustness_Nie'])")
+    exec(f"data_{name} = pd.DataFrame(data_{name}, columns = ['graph_ID', 'p', 'mean_ran', 'std_ran', 'mean_strat', 'std_strat', 'robustness_Nie', 'robustness_Ros'])")
     exec(f"data_{name}.name = name")
 
-
-# Analysis ###################################################################
-
-# Pring mean for each error level for each centrality
+# Save results as csv
 for df in [data_degree, data_between, data_eigen, data_page]:
-    df['robustness_Ros'] = df['mean_ran'] - df['mean_strat']
-    print('\n', df.name)
-    print(df.groupby('p')[['mean_ran', 'mean_strat', 'robustness_Ros', 'robustness_Nie']].mean())
-    print(df.groupby('p')[['robustness_Ros', 'robustness_Nie']].std())
+    df.to_csv('data_' + df.name + '.csv', sep = ';')
 
 
+# 5. Analysis ###################################################################
 
-# Plotting ###################################################################
+# see other skript 
