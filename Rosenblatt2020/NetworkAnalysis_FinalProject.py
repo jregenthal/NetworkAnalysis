@@ -189,12 +189,11 @@ for i, G_true in enumerate(graphs[:5]):
             immune_nodes = sorted(dic, key=dic.get, reverse=True)[:num_immune_nodes]
             mean_strat, std_strat = sim_infection(G_true, immune_nodes, numOfSimulations, beta, gamma)
             
-            # Robustness by Rosenblatt et al. (2020): Use the concept proposed by Rosenblatt et al. (2020) to compute 
+            # Measure by Rosenblatt et al. (2020): Use the concept proposed by Rosenblatt et al. (2020) to compute 
             # robustness of the centrality measure with respect to the corresponding immunization strategy 
-            
             robustness_Ros = mean_ran - mean_strat
             
-            # Robustness by Martin et al. (2019): Use the function proposed by Martin et al. (2019) to compute 
+            # Measure by Martin and Niemeyer (2019): Use the function proposed by Martin and Niemeyer (2019) to compute 
             # robustness of the centrality measure
             robustness_calculator = robustness_calculator_builder(centrality)
             robustness_Nie = robustness_calculator(G_true, G_observed)            
@@ -215,4 +214,4 @@ for df in [data_degree, data_between, data_eigen, data_page]:
 
 # 5. Analysis ###################################################################
 
-# see other skript 
+# see R skript "NetworkAnalysis_FinalProject_Plotting.R"
