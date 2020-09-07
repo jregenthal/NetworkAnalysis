@@ -4,11 +4,11 @@ This project seeks to replicate the “immunization robustness” described by R
 
 Summary of the files: 
 
-* NetworkAnalysis_FinalProject.py: Main script which runs the outbreak simulations within randomly generated configuration networks based on the Colorado Springs network
-* NetworkAnalysis_FinalProject.R: Script to plot the final results of the simulations 
-* data_ ...: centrality-specific data results of the simulation outbreaks (betweenness centrality, degree centrality, eigenvector centrality and pagerank were examined)
-* edgelist.truecolsprings.csv: edgelist of original Colorado Springs network
-* EstimatingCentralityRobustness.py: Functions created by Martin and Niemeyer (2019) to calculate "traditional robustness"
+* _NetworkAnalysis_FinalProject.py_: Main script which runs the outbreak simulations within randomly generated configuration networks based on the Colorado Springs network
+* _NetworkAnalysis_FinalProject.R_: Script to plot the final results of the simulations 
+* _data...csv_: centrality-specific data results of the simulation outbreaks (betweenness centrality, degree centrality, eigenvector centrality and pagerank were examined)
+* _edgelist.truecolsprings.csv_: edgelist of original Colorado Springs network
+* _EstimatingCentralityRobustness.py_: Functions created by Martin and Niemeyer (2019) to calculate "traditional robustness"
 
 
 Sources: 
